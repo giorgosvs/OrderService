@@ -11,7 +11,7 @@ public interface ProductMapper {
 
 
     @Mapping(source = "productStatus", target = "productStatus")
-    @Mapping(source = "productCategory", target = "productCategory")
+    @Mapping(source = "productCategory", target = "productCategory") //added category here to map properly
     Product mapToProduct(DbProduct dbProduct);
 
     default ProductStatus mapStatus(String status) {

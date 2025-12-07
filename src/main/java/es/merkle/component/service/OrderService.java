@@ -20,7 +20,6 @@ import es.merkle.component.repository.adapter.OrderAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import es.merkle.component.model.ProductStatus;
 
 import java.math.BigDecimal;
 import java.sql.SQLOutput;
@@ -60,8 +59,6 @@ public class OrderService {
     @Autowired
     private CustomerRepository customerRepository;
 
-    private Order order;
-
     @JsonFormat(pattern="yyyy-MM-dd")
     private LocalDate date;
 
@@ -87,16 +84,16 @@ public class OrderService {
 
     public Order modifyOrder(ModifyOrderRequest orderRequest) throws RuntimeException {
 
-        System.out.println(":: Inside modify Order ::");
         //Retrieve a saved order by its ID
         DbOrder savedOrder = orderRepository.findById(orderRequest.getOrderId()).orElseThrow(() -> new RuntimeException("Order not found"));
+        assert savedOrder != null;
         //Check if requested product is available - todo handle exception here in a better way
         DbProduct reqProduct = productRepository.findById(orderRequest.getProductId()).orElseThrow(() -> new RuntimeException("Product not found"));
 
-        if(savedOrder!=null) { //todo condition here, exception is thrown - maybe it is not needed
+        Order order;
 
-            //Check OrderType
-            if(orderRequest.getOrderType() == OrderType.ADD) {
+        //Check OrderType
+        if(orderRequest.getOrderType() == OrderType.ADD) {
 
                 savedOrder.getAddingProducts().add(orderRequest.getProductId());
 
@@ -108,7 +105,7 @@ public class OrderService {
 
             } else if (orderRequest.getOrderType() == OrderType.REMOVE) {
                 //safety check - product cannot be removed if not addded or product list is empty
-                if(!savedOrder.getAddingProducts().isEmpty() || !savedOrder.getAddingProducts().contains(orderRequest.getProductId())){
+                if( !savedOrder.getAddingProducts().isEmpty() && savedOrder.getAddingProducts().contains(orderRequest.getProductId())){
 
                     //Decorate the order with orderType
                     order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
@@ -129,44 +126,54 @@ public class OrderService {
                 order.setCustomerId(savedOrder.getCustomerId());
 
             } else {
-                throw new RuntimeException("Invalid order type");
+                throw new IllegalArgumentException("Invalid order type " + orderRequest.getOrderType());
             }
-        }
+
 
 
         //Process order here after product addition/removal
-        assert savedOrder != null;
-        order.setAddingProducts(orderMapper.mapIdsToProducts(savedOrder.getAddingProducts()));
+
+        List<Product> activeProducts = orderMapper.mapIdsToProducts(savedOrder.getAddingProducts());
+        order.setAddingProducts(activeProducts);
         order.setRemoveProducts(orderMapper.mapIdsToProducts(savedOrder.getRemoveProducts()));
 
-//        order.setRemoveProducts(orderMapper.mapIdsToProducts(savedOrder.getRemoveProducts()));
 
+        //Calculate final price
         BigDecimal finalPrice = BigDecimal.ZERO;
         for(String addingProductId : savedOrder.getAddingProducts()) {
             BigDecimal price = productRepository.findById(addingProductId).get().getPrice();
-            finalPrice = finalPrice.add(price);
+            if(orderRequest.getOrderType() == OrderType.ADD) {
+                finalPrice = finalPrice.add(price);
+            } else {
+                finalPrice = finalPrice.subtract(price);
+            }
         }
-        order.setFinalPrice(finalPrice);
-        //retrieve last object and pop the elements matching the removeProducts[]
-        //Calculate final price on addition/removal of product - use the reqProduct.getPrice() to do so
 
+        order.setFinalPrice(finalPrice);
 
         //Validate the order
-        String orderStatus = validateOrder(savedOrder, reqProduct);
+        String orderStatus = validateOrder(savedOrder, activeProducts);
+
+//        if(finalPrice.equals(BigDecimal.ZERO) || savedOrder.getAddingProducts().isEmpty()) { //means all products are removed and list is empty - return to initial order state NEW
+//            savedOrder.setStatus(OrderStatus.NEW);
+//        } else {
+//            savedOrder.setStatus(OrderStatus.valueOf(orderStatus)); //proceed normally
+//        }
+
+        //set order status to both dbOrder and order
+        savedOrder.setStatus(OrderStatus.valueOf(orderStatus));
         order.setStatus(OrderStatus.valueOf(orderStatus));
+        order.setProcessingProductId(orderRequest.getProductId());
 
         System.out.println("DATABASE ORDER");
         System.out.println(savedOrder.toString());
-        order.setProcessingProductId(orderRequest.getProductId());
         System.out.println("ORDER");
         System.out.println(order.toString());
+
         //Persist the updated order in the database.
-
         orderRepository.save(savedOrder);
-        //Return enriched order object
 
-
-        return order; //todo
+        return order;
     }
 
     public SubmitOrderResponse submitOrder(SubmitOrderRequest submitOrderRequest) {
@@ -212,15 +219,30 @@ public class OrderService {
     }
 
     //Maybe use Logger here
-    private String validateOrder(DbOrder order, DbProduct product) {
+    private String validateOrder(DbOrder order, List<Product> activeProducts) {
 //        The product status is NOT_AVAILABLE
 //        The product expiry date is in the past
 //        The product release date is in the future
+
         System.out.println("Date of order modification : " + LocalDate.now());
         //Convert product string status to enum and compare
-        String res = productMapper.mapStatus(product.getProductStatus()) == ProductStatus.NOT_AVAILABLE || product.getExpiringDate().isBefore(LocalDate.now()) || product.getReleasedDate().isAfter(LocalDate.now()) ? "INVALID" : "VALID";
-        return res;
+//        String res = productMapper.mapStatus(product.getProductStatus()) == ProductStatus.NOT_AVAILABLE || product.getExpiringDate().isBefore(LocalDate.now()) || product.getReleasedDate().isAfter(LocalDate.now()) ? "INVALID" : "VALID";
+
+        //Check for empty list, if so set state to 'NEW'
+        if(order.getAddingProducts() == null || order.getAddingProducts().isEmpty()) { //Initial state
+            return "NEW";
+        }
+
+        boolean hasInvalidAddingProduct = activeProducts.stream()
+                .anyMatch(p -> productMapper
+                .mapStatus(String.valueOf(p.getProductStatus())) == ProductStatus.NOT_AVAILABLE
+                || p.getExpiringDate().isBefore(LocalDate.now())
+                || p.getReleasedDate().isAfter(LocalDate.now()));
+
+
+        return hasInvalidAddingProduct ? "INVALID" : "VALID";
     }
+
 
     //todo
     private Order processOrder() {
