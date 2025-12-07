@@ -42,7 +42,8 @@ public abstract class OrderMapper {
 
     public abstract Order mapToOrder(DbOrder order);
 
-    protected Customer mapCustomer(String customer) {
+    //Switched access to public here
+    public Customer mapCustomer(String customer) {
         try {
             return objectMapper.readValue(customer, Customer.class);
         } catch (JsonProcessingException e) {

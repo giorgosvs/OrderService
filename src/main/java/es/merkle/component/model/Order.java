@@ -4,15 +4,13 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 
 @Builder
 @Data
 @RequiredArgsConstructor
 @AllArgsConstructor
+@ToString
 public class Order {
     private String id;
     private String customerId;

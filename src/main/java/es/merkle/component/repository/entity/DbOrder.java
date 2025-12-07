@@ -10,16 +10,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 @Entity(name = "orders")
 @Table(name = "orders")
 @Getter
 @Setter
+@ToString
 @SuperBuilder
 @RequiredArgsConstructor
 @AllArgsConstructor
