@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import es.merkle.component.repository.ProductRepository;
+import es.merkle.component.repository.entity.DbProduct;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -16,6 +19,7 @@ import es.merkle.component.model.api.CreateOrderRequest;
 import es.merkle.component.model.api.ModifyOrderRequest;
 import es.merkle.component.model.api.SubmitOrderRequest;
 import es.merkle.component.repository.entity.DbOrder;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Mapper(componentModel = "spring", imports = {UUID.class})
 public abstract class OrderMapper {
@@ -41,6 +45,11 @@ public abstract class OrderMapper {
     public abstract DbOrder mapToDbOrder(Order order);
 
     public abstract Order mapToOrder(DbOrder order);
+    
+    @Autowired
+    private ProductRepository productRepository;
+    @Autowired
+    private ProductMapper productMapper;
 
     //Switched access to public here
     public Customer mapCustomer(String customer) {
@@ -67,11 +76,14 @@ public abstract class OrderMapper {
                 .collect(Collectors.toList());
     }
 
-    protected List<Product> mapIdsToProducts(List<String> productIds) {
+    //Switched access to public here
+    public List<Product> mapIdsToProducts(List<String> productIds) {
         return Optional.ofNullable(productIds)
                 .orElse(new ArrayList<>())
                 .stream()
-                .map(productId -> new Product()) // TODO: I need to map the product from the db here
+                .map(productId -> productRepository.findById(productId).orElseThrow(() -> new RuntimeException("Product not found")))// TODO: I need to map the product from the db here
+                .map(productMapper::mapToProduct)
                 .collect(Collectors.toList());
     }
+
 }

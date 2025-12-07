@@ -9,7 +9,9 @@ import es.merkle.component.repository.entity.DbProduct;
 @Mapper(componentModel = "spring")
 public interface ProductMapper {
 
+
     @Mapping(source = "productStatus", target = "productStatus")
+    @Mapping(source = "productCategory", target = "productCategory")
     Product mapToProduct(DbProduct dbProduct);
 
     default ProductStatus mapStatus(String status) {

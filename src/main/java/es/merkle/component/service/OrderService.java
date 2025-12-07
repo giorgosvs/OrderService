@@ -1,12 +1,12 @@
 package es.merkle.component.service;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import es.merkle.component.mapper.ProductMapper;
 import es.merkle.component.model.*;
 import es.merkle.component.model.api.ModifyOrderRequest;
 import es.merkle.component.repository.CustomerRepository;
 import es.merkle.component.repository.OrderRepository;
 import es.merkle.component.repository.ProductRepository;
-import es.merkle.component.repository.entity.DbCustomer;
 import es.merkle.component.repository.entity.DbOrder;
 import es.merkle.component.repository.entity.DbProduct;
 import org.slf4j.Logger;
@@ -20,6 +20,7 @@ import es.merkle.component.repository.adapter.OrderAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import es.merkle.component.model.ProductStatus;
 
 import java.math.BigDecimal;
 import java.sql.SQLOutput;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +49,8 @@ public class OrderService {
     @Autowired
     private OrderMapper orderMapper;
     @Autowired
+    private ProductMapper productMapper;
+    @Autowired
     private OrderAdapter orderAdapter;
 
     @Autowired
@@ -60,6 +64,7 @@ public class OrderService {
 
     @JsonFormat(pattern="yyyy-MM-dd")
     private LocalDate date;
+
 
     //Creates a new order with orderStatus 'NEW' -> todo (?) How many orders is a customer allowed to create
     public Order createOrder(CreateOrderRequest orderRequest) {
@@ -100,12 +105,6 @@ public class OrderService {
 
                 order.setCustomerId(savedOrder.getCustomerId());
 
-                System.out.println("DATABASE ORDER");
-                System.out.println(savedOrder.toString());
-                order.setProcessingProductId(orderRequest.getProductId());
-                System.out.println("ORDER");
-                System.out.println(order.toString());
-
 
             } else if (orderRequest.getOrderType() == OrderType.REMOVE) {
                 //safety check - product cannot be removed if not addded or product list is empty
@@ -136,20 +135,38 @@ public class OrderService {
 
 
         //Process order here after product addition/removal
-        BigDecimal finalPrice = new BigDecimal("0.0");
+        assert savedOrder != null;
+        order.setAddingProducts(orderMapper.mapIdsToProducts(savedOrder.getAddingProducts()));
+        order.setRemoveProducts(orderMapper.mapIdsToProducts(savedOrder.getRemoveProducts()));
+
+//        order.setRemoveProducts(orderMapper.mapIdsToProducts(savedOrder.getRemoveProducts()));
+
+        BigDecimal finalPrice = BigDecimal.ZERO;
         for(String addingProductId : savedOrder.getAddingProducts()) {
-            BigDecimal price = new BigDecimal(String.valueOf(productRepository.findById(addingProductId).get().getPrice()));
-            finalPrice.add(price);
+            BigDecimal price = productRepository.findById(addingProductId).get().getPrice();
+            finalPrice = finalPrice.add(price);
         }
+        order.setFinalPrice(finalPrice);
         //retrieve last object and pop the elements matching the removeProducts[]
         //Calculate final price on addition/removal of product - use the reqProduct.getPrice() to do so
 
 
         //Validate the order
-        validateOrder(savedOrder, reqProduct);
+        String orderStatus = validateOrder(savedOrder, reqProduct);
+        order.setStatus(OrderStatus.valueOf(orderStatus));
+
+        System.out.println("DATABASE ORDER");
+        System.out.println(savedOrder.toString());
+        order.setProcessingProductId(orderRequest.getProductId());
+        System.out.println("ORDER");
+        System.out.println(order.toString());
         //Persist the updated order in the database.
+
+        orderRepository.save(savedOrder);
         //Return enriched order object
-        return null; //todo
+
+
+        return order; //todo
     }
 
     public SubmitOrderResponse submitOrder(SubmitOrderRequest submitOrderRequest) {
@@ -200,8 +217,8 @@ public class OrderService {
 //        The product expiry date is in the past
 //        The product release date is in the future
         System.out.println("Date of order modification : " + LocalDate.now());
-        String res = product.getProductStatus() == "NOT AVAILABLE" || product.getExpiringDate().isBefore(date.now()) || product.getReleasedDate().isAfter(date.now()) ? "INVALID" : "VALID";
-
+        //Convert product string status to enum and compare
+        String res = productMapper.mapStatus(product.getProductStatus()) == ProductStatus.NOT_AVAILABLE || product.getExpiringDate().isBefore(LocalDate.now()) || product.getReleasedDate().isAfter(LocalDate.now()) ? "INVALID" : "VALID";
         return res;
     }
 
