@@ -7,6 +7,8 @@ import es.merkle.component.model.api.ModifyOrderRequest;
 import es.merkle.component.repository.CustomerRepository;
 import es.merkle.component.repository.OrderRepository;
 import es.merkle.component.repository.ProductRepository;
+import es.merkle.component.repository.adapter.CustomerAdapter;
+import es.merkle.component.repository.entity.DbCustomer;
 import es.merkle.component.repository.entity.DbOrder;
 import es.merkle.component.repository.entity.DbProduct;
 import org.slf4j.Logger;
@@ -51,13 +53,14 @@ public class OrderService {
     private ProductMapper productMapper;
     @Autowired
     private OrderAdapter orderAdapter;
+    @Autowired
+    private CustomerAdapter customerAdapter;
 
     @Autowired
     private OrderRepository orderRepository;
     @Autowired
     private ProductRepository productRepository;
-    @Autowired
-    private CustomerRepository customerRepository;
+
 
     @JsonFormat(pattern="yyyy-MM-dd")
     private LocalDate date;
@@ -86,9 +89,12 @@ public class OrderService {
 
         //Retrieve a saved order by its ID
         DbOrder savedOrder = orderRepository.findById(orderRequest.getOrderId()).orElseThrow(() -> new RuntimeException("Order not found"));
-        assert savedOrder != null;
+
         //Check if requested product is available - todo handle exception here in a better way
         DbProduct reqProduct = productRepository.findById(orderRequest.getProductId()).orElseThrow(() -> new RuntimeException("Product not found"));
+
+        //Check if customer exists
+        Customer customer = customerAdapter.getCustomer(savedOrder.getCustomerId());
 
         Order order;
 
@@ -138,15 +144,11 @@ public class OrderService {
         order.setRemoveProducts(orderMapper.mapIdsToProducts(savedOrder.getRemoveProducts()));
 
 
-        //Calculate final price
+        //Calculate final price - no need to handle remove case, since final price is the sum of adding products
         BigDecimal finalPrice = BigDecimal.ZERO;
         for(String addingProductId : savedOrder.getAddingProducts()) {
             BigDecimal price = productRepository.findById(addingProductId).get().getPrice();
-            if(orderRequest.getOrderType() == OrderType.ADD) {
-                finalPrice = finalPrice.add(price);
-            } else {
-                finalPrice = finalPrice.subtract(price);
-            }
+            finalPrice = finalPrice.add(price);
         }
 
         order.setFinalPrice(finalPrice);
@@ -165,13 +167,20 @@ public class OrderService {
         order.setStatus(OrderStatus.valueOf(orderStatus));
         order.setProcessingProductId(orderRequest.getProductId());
 
+        //Set customer to order
+        order.setCustomer(customer);
+
         System.out.println("DATABASE ORDER");
         System.out.println(savedOrder.toString());
         System.out.println("ORDER");
         System.out.println(order.toString());
+        System.out.println("CUSTOMER");
+        System.out.println(customer.toString());
 
         //Persist the updated order in the database.
-        orderRepository.save(savedOrder);
+
+        orderAdapter.saveOrder(order);
+//        orderRepository.save(savedOrder);
 
         return order;
     }
@@ -229,7 +238,7 @@ public class OrderService {
 //        String res = productMapper.mapStatus(product.getProductStatus()) == ProductStatus.NOT_AVAILABLE || product.getExpiringDate().isBefore(LocalDate.now()) || product.getReleasedDate().isAfter(LocalDate.now()) ? "INVALID" : "VALID";
 
         //Check for empty list, if so set state to 'NEW'
-        if(order.getAddingProducts() == null || order.getAddingProducts().isEmpty()) { //Initial state
+        if(order.getAddingProducts().isEmpty()) { //Initial state
             return "NEW";
         }
 
@@ -241,12 +250,6 @@ public class OrderService {
 
 
         return hasInvalidAddingProduct ? "INVALID" : "VALID";
-    }
-
-
-    //todo
-    private Order processOrder() {
-        return null;
     }
 
 }
