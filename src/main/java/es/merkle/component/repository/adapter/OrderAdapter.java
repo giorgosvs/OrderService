@@ -1,5 +1,6 @@
 package es.merkle.component.repository.adapter;
 
+import es.merkle.component.model.api.ModifyOrderRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import es.merkle.component.mapper.OrderMapper;
@@ -21,5 +22,9 @@ public class OrderAdapter {
         DbOrder dbOrder = orderMapper.mapToDbOrder(order);
         System.out.println("Saving Order Object : " + dbOrder.getId());
         orderRepository.save(dbOrder);
+    }
+
+    public DbOrder getReqOrderById(String id) {
+        return orderRepository.findById(id).orElseThrow(() -> new RuntimeException("Order not found"));
     }
 }

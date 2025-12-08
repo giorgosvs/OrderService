@@ -8,6 +8,7 @@ import es.merkle.component.repository.CustomerRepository;
 import es.merkle.component.repository.OrderRepository;
 import es.merkle.component.repository.ProductRepository;
 import es.merkle.component.repository.adapter.CustomerAdapter;
+import es.merkle.component.repository.adapter.ProductAdapter;
 import es.merkle.component.repository.entity.DbCustomer;
 import es.merkle.component.repository.entity.DbOrder;
 import es.merkle.component.repository.entity.DbProduct;
@@ -51,16 +52,13 @@ public class OrderService {
     private OrderMapper orderMapper;
     @Autowired
     private ProductMapper productMapper;
+
     @Autowired
     private OrderAdapter orderAdapter;
     @Autowired
     private CustomerAdapter customerAdapter;
-
     @Autowired
-    private OrderRepository orderRepository;
-    @Autowired
-    private ProductRepository productRepository;
-
+    private ProductAdapter productAdapter;
 
     @JsonFormat(pattern="yyyy-MM-dd")
     private LocalDate date;
@@ -88,12 +86,12 @@ public class OrderService {
     public Order modifyOrder(ModifyOrderRequest orderRequest) throws RuntimeException {
 
         //Retrieve a saved order by its ID
-        DbOrder savedOrder = orderRepository.findById(orderRequest.getOrderId()).orElseThrow(() -> new RuntimeException("Order not found"));
+        DbOrder savedOrder = orderAdapter.getReqOrderById(orderRequest.getOrderId());
 
         //Check if requested product is available - todo handle exception here in a better way
-        DbProduct reqProduct = productRepository.findById(orderRequest.getProductId()).orElseThrow(() -> new RuntimeException("Product not found"));
+        DbProduct reqProduct = productAdapter.getReqProductById(orderRequest.getProductId());
 
-        //Check if customer exists
+        //Retrieve customer
         Customer customer = customerAdapter.getCustomer(savedOrder.getCustomerId());
 
         Order order;
@@ -102,25 +100,16 @@ public class OrderService {
         if(orderRequest.getOrderType() == OrderType.ADD) {
 
                 savedOrder.getAddingProducts().add(orderRequest.getProductId());
-
                 //Decorate the order with orderType
                 order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
-
-                order.setCustomerId(savedOrder.getCustomerId());
-
 
             } else if (orderRequest.getOrderType() == OrderType.REMOVE) {
                 //safety check - product cannot be removed if not addded or product list is empty
                 if( !savedOrder.getAddingProducts().isEmpty() && savedOrder.getAddingProducts().contains(orderRequest.getProductId())){
-
-                    //Decorate the order with orderType
-                    order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
-
                     //remove from AddingProducts
                     savedOrder.getAddingProducts().remove(orderRequest.getProductId());
                     //add to RemoveProducts
                     savedOrder.getRemoveProducts().add(orderRequest.getProductId());
-
 
                 } else {
                     throw new RuntimeException("Cannot Remove: Order list is empty or does not contain requested product.");
@@ -129,41 +118,27 @@ public class OrderService {
                 //Decorate the order with orderType
                 order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
 
-                order.setCustomerId(savedOrder.getCustomerId());
-
             } else {
                 throw new IllegalArgumentException("Invalid order type " + orderRequest.getOrderType());
             }
 
-
+        //Set the customer id
+        order.setCustomerId(savedOrder.getCustomerId());
 
         //Process order here after product addition/removal
-
+        //keep adding product list(activeProducts) for validation of order
         List<Product> activeProducts = orderMapper.mapIdsToProducts(savedOrder.getAddingProducts());
+
         order.setAddingProducts(activeProducts);
         order.setRemoveProducts(orderMapper.mapIdsToProducts(savedOrder.getRemoveProducts()));
 
-
-        //Calculate final price - no need to handle remove case, since final price is the sum of adding products
-        BigDecimal finalPrice = BigDecimal.ZERO;
-        for(String addingProductId : savedOrder.getAddingProducts()) {
-            BigDecimal price = productRepository.findById(addingProductId).get().getPrice();
-            finalPrice = finalPrice.add(price);
-        }
-
-        order.setFinalPrice(finalPrice);
+        //Set the final price
+        order.setFinalPrice(calulateFinalPrice(savedOrder.getAddingProducts()));
 
         //Validate the order
         String orderStatus = validateOrder(savedOrder, activeProducts);
 
-//        if(finalPrice.equals(BigDecimal.ZERO) || savedOrder.getAddingProducts().isEmpty()) { //means all products are removed and list is empty - return to initial order state NEW
-//            savedOrder.setStatus(OrderStatus.NEW);
-//        } else {
-//            savedOrder.setStatus(OrderStatus.valueOf(orderStatus)); //proceed normally
-//        }
-
-        //set order status to both dbOrder and order
-        savedOrder.setStatus(OrderStatus.valueOf(orderStatus));
+        //set order status
         order.setStatus(OrderStatus.valueOf(orderStatus));
         order.setProcessingProductId(orderRequest.getProductId());
 
@@ -178,10 +153,7 @@ public class OrderService {
         System.out.println(customer.toString());
 
         //Persist the updated order in the database.
-
-        orderAdapter.saveOrder(order);
-//        orderRepository.save(savedOrder);
-
+        saveOrder(order);
         return order;
     }
 
@@ -190,6 +162,9 @@ public class OrderService {
         SubmitOrderResponse submitOrderResponse = new SubmitOrderResponse();
         submitOrderResponse.setOrder(order);
 
+        //1. Check if order exists and fetch from db
+        //2. Make a custom response by thinking what you actually be useful and secure
+        //3. Do the checks
         if (order.getStatus() == OrderStatus.INVALID) {
             submitOrderResponse.getOrder().setStatus(OrderStatus.FAILED);
             submitOrderResponse.setMessage("The order was not submitted because it's INVALID");
@@ -229,27 +204,29 @@ public class OrderService {
 
     //Maybe use Logger here
     private String validateOrder(DbOrder order, List<Product> activeProducts) {
-//        The product status is NOT_AVAILABLE
-//        The product expiry date is in the past
-//        The product release date is in the future
-
-        System.out.println("Date of order modification : " + LocalDate.now());
-        //Convert product string status to enum and compare
-//        String res = productMapper.mapStatus(product.getProductStatus()) == ProductStatus.NOT_AVAILABLE || product.getExpiringDate().isBefore(LocalDate.now()) || product.getReleasedDate().isAfter(LocalDate.now()) ? "INVALID" : "VALID";
 
         //Check for empty list, if so set state to 'NEW'
         if(order.getAddingProducts().isEmpty()) { //Initial state
             return "NEW";
         }
-
         boolean hasInvalidAddingProduct = activeProducts.stream()
                 .anyMatch(p -> productMapper
                 .mapStatus(String.valueOf(p.getProductStatus())) == ProductStatus.NOT_AVAILABLE
                 || p.getExpiringDate().isBefore(LocalDate.now())
                 || p.getReleasedDate().isAfter(LocalDate.now()));
 
-
         return hasInvalidAddingProduct ? "INVALID" : "VALID";
     }
 
-}
+    //calculate final price
+    private BigDecimal calulateFinalPrice(List<String> addingProdcuts) {
+        //Calculate final price - no need to handle remove case, since final price is the sum of adding products
+        BigDecimal finalPrice = BigDecimal.ZERO;
+        for(String addingProductId : addingProdcuts) {
+            BigDecimal price = productAdapter.getReqProductById(addingProductId).getPrice();
+            finalPrice = finalPrice.add(price);
+        }
+        return finalPrice;
+    }
+    }
+
