@@ -5,11 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.persistence.Table;
 import es.merkle.component.model.OrderStatus;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
@@ -35,5 +31,6 @@ public class DbOrder {
     @ElementCollection
     private List<String> removeProducts = new ArrayList<>();
     private BigDecimal finalPrice;
+    @Column(columnDefinition = "TEXT") //
     private String customer;
 }

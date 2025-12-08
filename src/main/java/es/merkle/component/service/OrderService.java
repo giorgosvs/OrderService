@@ -151,7 +151,11 @@ public class OrderService {
 
         order = orderMapper.mapToOrder(savedOrder);
 
+
+
         SubmitOrderResponse response = handleSubmitOrder(order);
+
+        saveOrder(order);
 
         return response;
     }
@@ -176,10 +180,15 @@ public class OrderService {
     //Maybe use Logger here
     private String validateOrder(DbOrder order, List<Product> activeProducts) {
 
+        //Check if order already submitted
+        if(order.getStatus() == OrderStatus.SUBMITTED) {
+            throw new InvalidOrderException("Validation error : Order is already submitted");
+        }
         //Check for empty list, if so set state to 'NEW'
         if(order.getAddingProducts().isEmpty()) { //Initial state
             return "NEW";
         }
+
         boolean hasInvalidAddingProduct = activeProducts.stream()
                 .anyMatch(p -> productMapper
                 .mapStatus(String.valueOf(p.getProductStatus())) == ProductStatus.NOT_AVAILABLE
@@ -213,7 +222,14 @@ public class OrderService {
                 response.getOrder().setStatus(OrderStatus.FAILED);
                 response.setMessage("The order was not submitted because it's INVALID");
             }
+
+            //use methods of mapper jackson
             case VALID -> {
+                //Pass products into owned products List of products
+                List<Product> addingProducts = order.getAddingProducts();
+                for (Product product : addingProducts) {
+                    order.getCustomer().getOwnedProducts().add(product);
+                }
                 response.getOrder().setStatus(OrderStatus.SUBMITTED);
                 response.setMessage("The order was submitted successfully");
             }
@@ -221,7 +237,7 @@ public class OrderService {
                 response.getOrder().setStatus(OrderStatus.NEW);
                 response.setMessage("The order was not submitted because it's not in a final status");
             }
-            //if order status is different than these, throw not supported
+            //if order status is different from these, throw invalid order exception
             default -> {
                 throw new InvalidOrderException("Unsupported order status "+ order.getStatus() + ": Could not submit");
             }

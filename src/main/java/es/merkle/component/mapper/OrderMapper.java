@@ -24,7 +24,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 @Mapper(componentModel = "spring", imports = {UUID.class})
 public abstract class OrderMapper {
 
-    final ObjectMapper objectMapper = new ObjectMapper();
+//    final ObjectMapper objectMapper = new ObjectMapper();
+    @Autowired
+    private ObjectMapper objectMapper;
+
 
     @Mapping(target = "id", expression = "java(UUID.randomUUID().toString())")
     @Mapping(target = "status", constant = "NEW")
@@ -52,7 +55,7 @@ public abstract class OrderMapper {
     @Autowired
     private ProductMapper productMapper;
 
-    //serialization method
+    //deserialization method
     protected Customer mapCustomer(String customer) {
         try {
             return objectMapper.readValue(customer, Customer.class);
@@ -61,7 +64,7 @@ public abstract class OrderMapper {
         }
     }
 
-
+    //serialization method
     public String mapCustomer(Customer customer) {
         try {
             return objectMapper.writeValueAsString(customer);
@@ -70,7 +73,7 @@ public abstract class OrderMapper {
         }
     }
 
-    protected List<String> mapProductsToIds(List<Product> products) {
+    public List<String> mapProductsToIds(List<Product> products) {
         return Optional.ofNullable(products)
                 .orElse(new ArrayList<>())
                 .stream()
