@@ -1,6 +1,7 @@
 package es.merkle.component.controller;
 
 
+import es.merkle.component.exception.InvalidOrderException;
 import es.merkle.component.model.api.ModifyOrderRequest;
 import es.merkle.component.service.OrderService;
 import es.merkle.component.model.Order;
@@ -9,8 +10,10 @@ import es.merkle.component.model.api.SubmitOrderRequest;
 import es.merkle.component.model.api.SubmitOrderResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,25 +28,27 @@ public class OrderController {
 
     @PostMapping("/create")
     @ResponseBody
-    public Order create(@RequestBody CreateOrderRequest orderRequest) {
-        return orderService.createOrder(orderRequest);
+    public ResponseEntity<Order> create(@RequestBody CreateOrderRequest orderRequest) {
+        //validate input
+        if(orderRequest.getCustomerId() == null || orderRequest.getCustomerId().isBlank()) {
+            throw new InvalidOrderException("customerId must be provided");
+        }
+        Order order = orderService.createOrder(orderRequest);
+        return new ResponseEntity<>(order, HttpStatus.OK); //should be 201 CREATED
     }
 
     @PostMapping("/modify")
     @ResponseBody
-    public Order modify(@RequestBody ModifyOrderRequest orderRequest){
-        return orderService.modifyOrder(orderRequest);
+    public ResponseEntity<Order> modify(@RequestBody ModifyOrderRequest orderRequest){
+        Order order = orderService.modifyOrder(orderRequest);
+        return new ResponseEntity<>(order, HttpStatus.OK);
     }
 
     @PostMapping("/submit")
     @ResponseBody
-    public SubmitOrderResponse submit(@RequestBody SubmitOrderRequest order) {
-        return orderService.submitOrder(order);
-    }
-
-    @GetMapping("/orders")
-    public ResponseEntity<List<SubmitOrderResponse>> getAllOrders() {
-        return new ResponseEntity<>(orderService.getAllOrders(), HttpStatus.OK);
+    public ResponseEntity<SubmitOrderResponse> submit(@RequestBody SubmitOrderRequest order) {
+        SubmitOrderResponse response = orderService.submitOrder(order);
+        return new ResponseEntity<>(response,HttpStatus.OK);
     }
 
 }

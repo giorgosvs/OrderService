@@ -2,7 +2,6 @@ package es.merkle.component.service;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import es.merkle.component.exception.InvalidOrderException;
-import es.merkle.component.exception.OrderServiceException;
 import es.merkle.component.mapper.ProductMapper;
 import es.merkle.component.model.*;
 import es.merkle.component.model.api.ModifyOrderRequest;
@@ -32,13 +31,6 @@ public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
-
-    private static final String flagProductNotFound = "PRODUCT_NOT_FOUND";
-    private static final String flagPriceIncorrect = "PRICES_INCORRECT";
-    private static final String flagItemNotAvailable = "ITEM_NOT_AVAILABLE";
-    private static final String flagItemExpire = "ITEM_EXPIRED";
-    private static final String flagOrderDoesNotExist = "ORDER_DOES_NOT_EXIST";
-
     @Autowired
     private PopulatorRunner populatorRunner;
     @Autowired
@@ -56,30 +48,21 @@ public class OrderService {
     @JsonFormat(pattern="yyyy-MM-dd")
     private LocalDate date;
 
-
     //Creates a new order with orderStatus 'NEW' -> todo (?) How many orders is a customer allowed to create
     public Order createOrder(CreateOrderRequest orderRequest) {
-        //todo handle return status of create order, should only work when customerId is provided
         Order order = mapCreateOrderRequest(orderRequest);
-        try {
-            populateOrder(order); //populates with customer information(CustomerOrderPopulator) to enrich order object
-            saveOrder(order);
-        } catch (Exception e) {
-            log.error(e.getMessage());
-//            log.error("Error populating order", e);
-
-        }
+        //removed try-catch here, returned success message on failure
+        populateOrder(order); //populates order with customer information(CustomerOrderPopulator)
+        saveOrder(order);
         return order;
     }
-
-
 
     public Order modifyOrder(ModifyOrderRequest orderRequest) throws RuntimeException {
 
         //Retrieve a saved order by its ID
         DbOrder savedOrder = orderAdapter.getReqOrderById(orderRequest.getOrderId());
 
-        //Check if requested product is available - todo handle exception here in a better way
+        //Check if requested product is available
         DbProduct reqProduct = productAdapter.getReqProductById(orderRequest.getProductId());
 
         //Retrieve customer
@@ -103,7 +86,7 @@ public class OrderService {
                     savedOrder.getRemoveProducts().add(orderRequest.getProductId());
 
                 } else {
-                    throw new RuntimeException("Cannot Remove: Order list is empty or does not contain requested product.");
+                    throw new InvalidOrderException("Cannot remove product: Order list is empty or does not contain requested product.");
                 }
 
                 //Decorate the order with orderType
@@ -116,8 +99,8 @@ public class OrderService {
         //Set the customer id
         order.setCustomerId(savedOrder.getCustomerId());
 
-        //Process order here after product addition/removal
-        //keep adding product list(activeProducts) for validation of order
+        //Process order
+        //Save th adding product list(activeProducts) for order validation
         List<Product> activeProducts = orderMapper.mapIdsToProducts(savedOrder.getAddingProducts());
 
         order.setAddingProducts(activeProducts);
@@ -143,20 +126,18 @@ public class OrderService {
     }
 
     public SubmitOrderResponse submitOrder(SubmitOrderRequest submitOrderRequest) {
-        //todo order has to have products - so state should not be new
-        //todo if the status is submitted no more modification of order is allowed
 
-        Order order;
+        //Retrieve saved order
         DbOrder savedOrder = orderAdapter.getReqOrderById(submitOrderRequest.getOrderId());
 
-        order = orderMapper.mapToOrder(savedOrder);
+        //Map to order obj
+        Order order = orderMapper.mapToOrder(savedOrder);
 
-
-
+        //Handle submission
         SubmitOrderResponse response = handleSubmitOrder(order);
 
+        //Save order to db
         saveOrder(order);
-
         return response;
     }
 
@@ -172,17 +153,16 @@ public class OrderService {
         return orderMapper.mapCreateOrderRequestToOrder(orderRequest);
     }
 
-    //should return a list of OrderResponse dto
-    public List<SubmitOrderResponse> getAllOrders() {
-        return null;
-    }
+//    public List<SubmitOrderResponse> getAllOrders() {
+//        return null;
+//    }
 
     //Maybe use Logger here
     private String validateOrder(DbOrder order, List<Product> activeProducts) {
 
         //Check if order already submitted
         if(order.getStatus() == OrderStatus.SUBMITTED) {
-            throw new InvalidOrderException("Validation error : Order is already submitted");
+            throw new InvalidOrderException("Order is already submitted");
         }
         //Check for empty list, if so set state to 'NEW'
         if(order.getAddingProducts().isEmpty()) { //Initial state
@@ -239,7 +219,7 @@ public class OrderService {
             }
             //if order status is different from these, throw invalid order exception
             default -> {
-                throw new InvalidOrderException("Unsupported order status "+ order.getStatus() + ": Could not submit");
+                throw new InvalidOrderException("Could not perform submission with status :  "+ order.getStatus());
             }
         }
 

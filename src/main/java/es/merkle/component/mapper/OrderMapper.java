@@ -6,8 +6,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import es.merkle.component.exception.ResourceNotFoundException;
 import es.merkle.component.repository.ProductRepository;
-import es.merkle.component.repository.entity.DbProduct;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -64,7 +64,7 @@ public abstract class OrderMapper {
         }
     }
 
-    //serialization method
+    //serialization method - Customer dto to JSON
     public String mapCustomer(Customer customer) {
         try {
             return objectMapper.writeValueAsString(customer);
@@ -86,7 +86,7 @@ public abstract class OrderMapper {
         return Optional.ofNullable(productIds)
                 .orElse(new ArrayList<>())
                 .stream()
-                .map(productId -> productRepository.findById(productId).orElseThrow(() -> new RuntimeException("Product not found")))// TODO: I need to map the product from the db here
+                .map(productId -> productRepository.findById(productId).orElseThrow(() -> new ResourceNotFoundException("Product not found")))
                 .map(productMapper::mapToProduct)
                 .collect(Collectors.toList());
     }

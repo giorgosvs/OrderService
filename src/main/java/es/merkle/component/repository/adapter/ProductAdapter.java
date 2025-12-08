@@ -1,5 +1,6 @@
 package es.merkle.component.repository.adapter;
 
+import es.merkle.component.exception.ResourceNotFoundException;
 import es.merkle.component.mapper.ProductMapper;
 import es.merkle.component.repository.ProductRepository;
 import es.merkle.component.repository.entity.DbProduct;
@@ -17,6 +18,6 @@ public class ProductAdapter {
     private ProductMapper productMapper;
 
     public DbProduct getReqProductById (String id) {
-        return productRepository.findById(id).orElseThrow(() -> new RuntimeException("Product not found"));
+        return productRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Product not found"));
     }
 }

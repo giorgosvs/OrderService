@@ -1,6 +1,6 @@
 package es.merkle.component.repository.adapter;
 
-import es.merkle.component.model.api.ModifyOrderRequest;
+import es.merkle.component.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import es.merkle.component.mapper.OrderMapper;
@@ -25,6 +25,6 @@ public class OrderAdapter {
     }
 
     public DbOrder getReqOrderById(String id) {
-        return orderRepository.findById(id).orElseThrow(() -> new RuntimeException("Order not found"));
+        return orderRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Order with id : "+ id + " not found"));
     }
 }
