@@ -40,6 +40,7 @@ public abstract class OrderMapper {
     @Mapping(source = "orderId", target = "id")
     public abstract Order mapModifyOrderRequestToOrder(ModifyOrderRequest orderRequest);
 
+    @Mapping(source = "orderId", target = "id")
     public abstract Order mapSubmitOrderRequestToOrder(SubmitOrderRequest submitOrderRequest);
 
     public abstract DbOrder mapToDbOrder(Order order);
@@ -51,8 +52,8 @@ public abstract class OrderMapper {
     @Autowired
     private ProductMapper productMapper;
 
-    //Switched access to public here
-    public Customer mapCustomer(String customer) {
+    //serialization method
+    protected Customer mapCustomer(String customer) {
         try {
             return objectMapper.readValue(customer, Customer.class);
         } catch (JsonProcessingException e) {
@@ -60,7 +61,8 @@ public abstract class OrderMapper {
         }
     }
 
-    protected String mapCustomer(Customer customer) {
+
+    public String mapCustomer(Customer customer) {
         try {
             return objectMapper.writeValueAsString(customer);
         } catch (JsonProcessingException e) {

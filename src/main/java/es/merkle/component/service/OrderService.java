@@ -1,15 +1,13 @@
 package es.merkle.component.service;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import es.merkle.component.exception.InvalidOrderException;
+import es.merkle.component.exception.OrderServiceException;
 import es.merkle.component.mapper.ProductMapper;
 import es.merkle.component.model.*;
 import es.merkle.component.model.api.ModifyOrderRequest;
-import es.merkle.component.repository.CustomerRepository;
-import es.merkle.component.repository.OrderRepository;
-import es.merkle.component.repository.ProductRepository;
 import es.merkle.component.repository.adapter.CustomerAdapter;
 import es.merkle.component.repository.adapter.ProductAdapter;
-import es.merkle.component.repository.entity.DbCustomer;
 import es.merkle.component.repository.entity.DbOrder;
 import es.merkle.component.repository.entity.DbProduct;
 import org.slf4j.Logger;
@@ -25,13 +23,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.sql.SQLOutput;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -66,10 +59,8 @@ public class OrderService {
 
     //Creates a new order with orderStatus 'NEW' -> todo (?) How many orders is a customer allowed to create
     public Order createOrder(CreateOrderRequest orderRequest) {
+        //todo handle return status of create order, should only work when customerId is provided
         Order order = mapCreateOrderRequest(orderRequest);
-
-//        System.out.println("OrderRequest to Order is : " + order.toString());
-
         try {
             populateOrder(order); //populates with customer information(CustomerOrderPopulator) to enrich order object
             saveOrder(order);
@@ -103,7 +94,7 @@ public class OrderService {
                 //Decorate the order with orderType
                 order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
 
-            } else if (orderRequest.getOrderType() == OrderType.REMOVE) {
+        } else if (orderRequest.getOrderType() == OrderType.REMOVE) {
                 //safety check - product cannot be removed if not addded or product list is empty
                 if( !savedOrder.getAddingProducts().isEmpty() && savedOrder.getAddingProducts().contains(orderRequest.getProductId())){
                     //remove from AddingProducts
@@ -118,9 +109,9 @@ public class OrderService {
                 //Decorate the order with orderType
                 order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
 
-            } else {
-                throw new IllegalArgumentException("Invalid order type " + orderRequest.getOrderType());
-            }
+        } else {
+            throw new InvalidOrderException("Unsupported order type " + orderRequest.getOrderType());
+        }
 
         //Set the customer id
         order.setCustomerId(savedOrder.getCustomerId());
@@ -145,44 +136,24 @@ public class OrderService {
         //Set customer to order
         order.setCustomer(customer);
 
-        System.out.println("DATABASE ORDER");
-        System.out.println(savedOrder.toString());
-        System.out.println("ORDER");
-        System.out.println(order.toString());
-        System.out.println("CUSTOMER");
-        System.out.println(customer.toString());
-
         //Persist the updated order in the database.
         saveOrder(order);
+
         return order;
     }
 
     public SubmitOrderResponse submitOrder(SubmitOrderRequest submitOrderRequest) {
-        Order order = new Order(); // TODO: Idk how to do this
-        SubmitOrderResponse submitOrderResponse = new SubmitOrderResponse();
-        submitOrderResponse.setOrder(order);
+        //todo order has to have products - so state should not be new
+        //todo if the status is submitted no more modification of order is allowed
 
-        //1. Check if order exists and fetch from db
-        //2. Make a custom response by thinking what you actually be useful and secure
-        //3. Do the checks
-        if (order.getStatus() == OrderStatus.INVALID) {
-            submitOrderResponse.getOrder().setStatus(OrderStatus.FAILED);
-            submitOrderResponse.setMessage("The order was not submitted because it's INVALID");
-            return submitOrderResponse;
-        } else if (order.getStatus() == OrderStatus.VALID) {
-            submitOrderResponse.setMessage("The order was submitted successfully");
-            submitOrderResponse.getOrder().setStatus(OrderStatus.SUBMITTED);
-        } else if (order.getStatus() == OrderStatus.NEW) {
-            submitOrderResponse.setMessage("The was not submitted because it's not in a final status");
-            submitOrderResponse.getOrder().setStatus(OrderStatus.FAILED);
-        } else {
-            return null;
-        }
+        Order order;
+        DbOrder savedOrder = orderAdapter.getReqOrderById(submitOrderRequest.getOrderId());
 
-        //Order class has atrribute of Customer, so going to use mapCustomer method for conversion
-//                order.setCustomer(orderMapper.mapCustomer(savedOrder.getCustomer()));
+        order = orderMapper.mapToOrder(savedOrder);
 
-        return submitOrderResponse;
+        SubmitOrderResponse response = handleSubmitOrder(order);
+
+        return response;
     }
 
     private void saveOrder(Order order) {
@@ -222,11 +193,46 @@ public class OrderService {
     private BigDecimal calulateFinalPrice(List<String> addingProdcuts) {
         //Calculate final price - no need to handle remove case, since final price is the sum of adding products
         BigDecimal finalPrice = BigDecimal.ZERO;
+        //todo maybe add a check here for price
         for(String addingProductId : addingProdcuts) {
             BigDecimal price = productAdapter.getReqProductById(addingProductId).getPrice();
             finalPrice = finalPrice.add(price);
         }
         return finalPrice;
     }
+
+    private SubmitOrderResponse handleSubmitOrder(Order order) {
+
+        SubmitOrderResponse response = new SubmitOrderResponse();
+        response.setOrder(order);
+
+        //switch between OrderStatus to set appropriate response message
+        switch (order.getStatus()) {
+
+            case INVALID -> {
+                response.getOrder().setStatus(OrderStatus.FAILED);
+                response.setMessage("The order was not submitted because it's INVALID");
+            }
+            case VALID -> {
+                response.getOrder().setStatus(OrderStatus.SUBMITTED);
+                response.setMessage("The order was submitted successfully");
+            }
+            case NEW -> {
+                response.getOrder().setStatus(OrderStatus.NEW);
+                response.setMessage("The order was not submitted because it's not in a final status");
+            }
+            //if order status is different than these, throw not supported
+            default -> {
+                throw new InvalidOrderException("Unsupported order status "+ order.getStatus() + ": Could not submit");
+            }
+        }
+
+        return response;
     }
+
+}
+
+
+
+
 
