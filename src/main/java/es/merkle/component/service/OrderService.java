@@ -1,14 +1,11 @@
 package es.merkle.component.service;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import es.merkle.component.exception.CustomerNotFoundException;
 import es.merkle.component.exception.InvalidOrderException;
-import es.merkle.component.exception.ResourceNotFoundException;
 import es.merkle.component.mapper.ProductMapper;
 import es.merkle.component.model.*;
 import es.merkle.component.model.api.ModifyOrderRequest;
 import es.merkle.component.repository.CustomerRepository;
-import es.merkle.component.repository.ProductRepository;
 import es.merkle.component.repository.adapter.CustomerAdapter;
 import es.merkle.component.repository.adapter.ProductAdapter;
 import es.merkle.component.repository.entity.DbCustomer;
@@ -52,8 +49,6 @@ public class OrderService {
 
     @Autowired
     private CustomerRepository customerRepository;
-    @Autowired
-    private ProductRepository productRepository;
 
     //Create a new order with status 'NEW'
     public Order createOrder(CreateOrderRequest orderRequest) {
@@ -62,7 +57,6 @@ public class OrderService {
         //removed try-catch here, returned success message on failure
         populateOrder(order); //populate order with customer information(CustomerOrderPopulator)
         saveOrder(order);
-
         return order;
     }
 

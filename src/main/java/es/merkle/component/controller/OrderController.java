@@ -29,7 +29,7 @@ public class OrderController {
     @PostMapping("/create")
     @ResponseBody
     public ResponseEntity<Order> create(@RequestBody CreateOrderRequest orderRequest) {
-        //validate input
+        //use @Valid
         if(orderRequest.getCustomerId() == null || orderRequest.getCustomerId().isBlank()) {
             throw new InvalidOrderException("customerId must be provided");
         }
