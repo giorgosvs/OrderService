@@ -64,7 +64,7 @@ public abstract class OrderMapper {
         }
     }
 
-    //serialization method - Customer dto to JSON
+    //serialization method - Customer to JSON
     public String mapCustomer(Customer customer) {
         try {
             return objectMapper.writeValueAsString(customer);

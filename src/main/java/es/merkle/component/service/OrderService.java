@@ -45,15 +45,15 @@ public class OrderService {
     @Autowired
     private ProductAdapter productAdapter;
 
-    @JsonFormat(pattern="yyyy-MM-dd")
-    private LocalDate date;
 
-    //Creates a new order with orderStatus 'NEW' -> todo (?) How many orders is a customer allowed to create
+    //Create a new order with status 'NEW'
     public Order createOrder(CreateOrderRequest orderRequest) {
         Order order = mapCreateOrderRequest(orderRequest);
+
         //removed try-catch here, returned success message on failure
-        populateOrder(order); //populates order with customer information(CustomerOrderPopulator)
+        populateOrder(order); //populate order with customer information(CustomerOrderPopulator)
         saveOrder(order);
+
         return order;
     }
 
@@ -61,37 +61,31 @@ public class OrderService {
 
         //Retrieve a saved order by its ID
         DbOrder savedOrder = orderAdapter.getReqOrderById(orderRequest.getOrderId());
-
         //Check if requested product is available
         DbProduct reqProduct = productAdapter.getReqProductById(orderRequest.getProductId());
-
         //Retrieve customer
         Customer customer = customerAdapter.getCustomer(savedOrder.getCustomerId());
 
         Order order;
 
-        //Check OrderType
+        //Check type, if not supported throw ex
         if(orderRequest.getOrderType() == OrderType.ADD) {
-
                 savedOrder.getAddingProducts().add(orderRequest.getProductId());
                 //Decorate the order with orderType
                 order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
-
         } else if (orderRequest.getOrderType() == OrderType.REMOVE) {
-                //safety check - product cannot be removed if not addded or product list is empty
-                if( !savedOrder.getAddingProducts().isEmpty() && savedOrder.getAddingProducts().contains(orderRequest.getProductId())){
-                    //remove from AddingProducts
-                    savedOrder.getAddingProducts().remove(orderRequest.getProductId());
-                    //add to RemoveProducts
-                    savedOrder.getRemoveProducts().add(orderRequest.getProductId());
+            //safety check - product cannot be removed if not added or product list is empty
+            if( !savedOrder.getAddingProducts().isEmpty() && savedOrder.getAddingProducts().contains(orderRequest.getProductId())){
+                //remove from AddingProducts
+                savedOrder.getAddingProducts().remove(orderRequest.getProductId());
+                //add to RemoveProducts
+                savedOrder.getRemoveProducts().add(orderRequest.getProductId());
+            } else {
+                throw new InvalidOrderException("Cannot remove product: Order list is empty or does not contain requested product.");
+            }
 
-                } else {
-                    throw new InvalidOrderException("Cannot remove product: Order list is empty or does not contain requested product.");
-                }
-
-                //Decorate the order with orderType
-                order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
-
+            //Decorate the order with orderType
+            order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
         } else {
             throw new InvalidOrderException("Unsupported order type " + orderRequest.getOrderType());
         }
@@ -153,11 +147,6 @@ public class OrderService {
         return orderMapper.mapCreateOrderRequestToOrder(orderRequest);
     }
 
-//    public List<SubmitOrderResponse> getAllOrders() {
-//        return null;
-//    }
-
-    //Maybe use Logger here
     private String validateOrder(DbOrder order, List<Product> activeProducts) {
 
         //Check if order already submitted
@@ -168,7 +157,7 @@ public class OrderService {
         if(order.getAddingProducts().isEmpty()) { //Initial state
             return "NEW";
         }
-
+        //Check conditions
         boolean hasInvalidAddingProduct = activeProducts.stream()
                 .anyMatch(p -> productMapper
                 .mapStatus(String.valueOf(p.getProductStatus())) == ProductStatus.NOT_AVAILABLE
@@ -180,7 +169,6 @@ public class OrderService {
 
     //calculate final price
     private BigDecimal calulateFinalPrice(List<String> addingProdcuts) {
-        //Calculate final price - no need to handle remove case, since final price is the sum of adding products
         BigDecimal finalPrice = BigDecimal.ZERO;
         //todo maybe add a check here for price
         for(String addingProductId : addingProdcuts) {
@@ -195,7 +183,7 @@ public class OrderService {
         SubmitOrderResponse response = new SubmitOrderResponse();
         response.setOrder(order);
 
-        //switch between OrderStatus to set appropriate response message
+        //switch between OrderStatus to set response message
         switch (order.getStatus()) {
 
             case INVALID -> {
@@ -203,9 +191,8 @@ public class OrderService {
                 response.setMessage("The order was not submitted because it's INVALID");
             }
 
-            //use methods of mapper jackson
             case VALID -> {
-                //Pass products into owned products List of products
+                //Pass products customer bought into ownedProducts list
                 List<Product> addingProducts = order.getAddingProducts();
                 for (Product product : addingProducts) {
                     order.getCustomer().getOwnedProducts().add(product);
@@ -217,7 +204,7 @@ public class OrderService {
                 response.getOrder().setStatus(OrderStatus.NEW);
                 response.setMessage("The order was not submitted because it's not in a final status");
             }
-            //if order status is different from these, throw invalid order exception
+            //Else throw invalid order exception
             default -> {
                 throw new InvalidOrderException("Could not perform submission with status :  "+ order.getStatus());
             }
@@ -225,7 +212,6 @@ public class OrderService {
 
         return response;
     }
-
 }
 
 

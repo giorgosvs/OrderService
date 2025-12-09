@@ -20,7 +20,7 @@ public class OrderAdapter {
 
     public void saveOrder(Order order) {
         DbOrder dbOrder = orderMapper.mapToDbOrder(order);
-        System.out.println("Saving Order Object : " + dbOrder.getId());
+//        System.out.println("Saving Order Object : " + dbOrder.getId());
         orderRepository.save(dbOrder);
     }
 
