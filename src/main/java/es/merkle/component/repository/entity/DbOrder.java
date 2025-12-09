@@ -21,7 +21,7 @@ public class DbOrder {
 
     @Id
     private String id;
-    private String customerId;
+//    private String customerId;
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status;
@@ -31,6 +31,8 @@ public class DbOrder {
     @ElementCollection
     private List<String> removeProducts = new ArrayList<>();
     private BigDecimal finalPrice;
-    @Column(columnDefinition = "TEXT") //
-    private String customer;
+
+    @ManyToOne(fetch = FetchType.LAZY) //used JPA relationship here Many to One
+    @JoinColumn(name = "customer_id") //joined object under customerId. Now it references to customer with foreign key relationship
+    private DbCustomer customer; //Customer -> DbCustomer
 }

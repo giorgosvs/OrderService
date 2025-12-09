@@ -1,12 +1,17 @@
 package es.merkle.component.service;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import es.merkle.component.exception.CustomerNotFoundException;
 import es.merkle.component.exception.InvalidOrderException;
+import es.merkle.component.exception.ResourceNotFoundException;
 import es.merkle.component.mapper.ProductMapper;
 import es.merkle.component.model.*;
 import es.merkle.component.model.api.ModifyOrderRequest;
+import es.merkle.component.repository.CustomerRepository;
+import es.merkle.component.repository.ProductRepository;
 import es.merkle.component.repository.adapter.CustomerAdapter;
 import es.merkle.component.repository.adapter.ProductAdapter;
+import es.merkle.component.repository.entity.DbCustomer;
 import es.merkle.component.repository.entity.DbOrder;
 import es.merkle.component.repository.entity.DbProduct;
 import org.slf4j.Logger;
@@ -45,6 +50,10 @@ public class OrderService {
     @Autowired
     private ProductAdapter productAdapter;
 
+    @Autowired
+    private CustomerRepository customerRepository;
+    @Autowired
+    private ProductRepository productRepository;
 
     //Create a new order with status 'NEW'
     public Order createOrder(CreateOrderRequest orderRequest) {
@@ -64,7 +73,7 @@ public class OrderService {
         //Check if requested product is available
         DbProduct reqProduct = productAdapter.getReqProductById(orderRequest.getProductId());
         //Retrieve customer
-        Customer customer = customerAdapter.getCustomer(savedOrder.getCustomerId());
+        Customer customer = customerAdapter.getCustomer(savedOrder.getCustomer().getId());
 
         Order order;
 
@@ -91,7 +100,7 @@ public class OrderService {
         }
 
         //Set the customer id
-        order.setCustomerId(savedOrder.getCustomerId());
+        order.setCustomerId(savedOrder.getCustomer().getId());
 
         //Process order
         //Save th adding product list(activeProducts) for order validation
@@ -123,12 +132,15 @@ public class OrderService {
 
         //Retrieve saved order
         DbOrder savedOrder = orderAdapter.getReqOrderById(submitOrderRequest.getOrderId());
-
         //Map to order obj
         Order order = orderMapper.mapToOrder(savedOrder);
+        //Fetch customer
+        DbCustomer dbCustomer = customerRepository.findById(order.getCustomer().getId()).orElseThrow(() -> new CustomerNotFoundException("Customer not found"));
+        //get the active products
+        List<Product> addingProducts = order.getAddingProducts();
 
         //Handle submission
-        SubmitOrderResponse response = handleSubmitOrder(order);
+        SubmitOrderResponse response = handleSubmitOrder(order, dbCustomer, addingProducts);
 
         //Save order to db
         saveOrder(order);
@@ -149,7 +161,7 @@ public class OrderService {
 
     private String validateOrder(DbOrder order, List<Product> activeProducts) {
 
-        //Check if order already submitted
+        //Check if order is already submitted
         if(order.getStatus() == OrderStatus.SUBMITTED) {
             throw new InvalidOrderException("Order is already submitted");
         }
@@ -178,7 +190,7 @@ public class OrderService {
         return finalPrice;
     }
 
-    private SubmitOrderResponse handleSubmitOrder(Order order) {
+    private SubmitOrderResponse handleSubmitOrder(Order order, DbCustomer dbCustomer, List<Product> activeProducts) {
 
         SubmitOrderResponse response = new SubmitOrderResponse();
         response.setOrder(order);
@@ -189,24 +201,30 @@ public class OrderService {
             case INVALID -> {
                 response.getOrder().setStatus(OrderStatus.FAILED);
                 response.setMessage("The order was not submitted because it's INVALID");
+                throw new InvalidOrderException(response.getMessage());
             }
-
             case VALID -> {
-                //Pass products customer bought into ownedProducts list
-                List<Product> addingProducts = order.getAddingProducts();
-                for (Product product : addingProducts) {
+                for (Product product : activeProducts) {
+                    //Add owned product to response body
                     order.getCustomer().getOwnedProducts().add(product);
+
+                    DbProduct dbProduct = productMapper.mapToDbProduct(product);
+                    //Save owned product to db
+                    dbCustomer.getOwnedProducts().add(dbProduct);
                 }
+                //Persist changes
+                customerRepository.save(dbCustomer);
+
                 response.getOrder().setStatus(OrderStatus.SUBMITTED);
                 response.setMessage("The order was submitted successfully");
             }
             case NEW -> {
                 response.getOrder().setStatus(OrderStatus.NEW);
                 response.setMessage("The order was not submitted because it's not in a final status");
+                throw new InvalidOrderException(response.getMessage());
             }
-            //Else throw invalid order exception
             default -> {
-                throw new InvalidOrderException("Could not perform submission with status :  "+ order.getStatus());
+                throw new InvalidOrderException("Could not perform submission with order status being : "+ order.getStatus());
             }
         }
 

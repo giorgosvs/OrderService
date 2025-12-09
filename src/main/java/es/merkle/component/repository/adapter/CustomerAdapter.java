@@ -1,5 +1,6 @@
 package es.merkle.component.repository.adapter;
 
+import es.merkle.component.repository.entity.DbCustomer;
 import org.springframework.stereotype.Component;
 import es.merkle.component.exception.CustomerNotFoundException;
 import es.merkle.component.mapper.CustomerMapper;
