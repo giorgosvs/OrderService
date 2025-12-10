@@ -65,9 +65,9 @@ public class OrderService {
     @Transactional
     public Order modifyOrder(ModifyOrderRequest orderRequest) throws RuntimeException {
 
-        //Retrieve a saved order by its ID
+        //Retrieve a saved order by its ID todo test (Ex)
         DbOrder savedOrder = orderAdapter.getReqOrderById(orderRequest.getOrderId());
-        //Check if requested product is available
+        //Check if requested product is available todo test (Ex)
         DbProduct reqProduct = productAdapter.getReqProductById(orderRequest.getProductId());
         //Retrieve customer
         Customer customer = customerAdapter.getCustomer(savedOrder.getCustomer().getId());
@@ -79,14 +79,14 @@ public class OrderService {
                 savedOrder.getAddingProducts().add(orderRequest.getProductId());
                 //Decorate the order with orderType
                 order = orderMapper.mapModifyOrderRequestToOrder(orderRequest);
-        } else if (orderRequest.getOrderType() == OrderType.REMOVE) {
+        } else if (orderRequest.getOrderType() == OrderType.REMOVE) { //todo test
             //safety check - product cannot be removed if not added or product list is empty
             if( !savedOrder.getAddingProducts().isEmpty() && savedOrder.getAddingProducts().contains(orderRequest.getProductId())){
                 //remove from AddingProducts
                 savedOrder.getAddingProducts().remove(orderRequest.getProductId());
                 //add to RemoveProducts
                 savedOrder.getRemoveProducts().add(orderRequest.getProductId());
-            } else {
+            } else { //todo test
                 throw new InvalidOrderException("Cannot remove product: Order list is empty or does not contain requested product.");
             }
 
@@ -178,7 +178,7 @@ public class OrderService {
     }
 
     //calculate final price
-    private BigDecimal calulateFinalPrice(List<String> addingProdcuts) {
+    public BigDecimal calulateFinalPrice(List<String> addingProdcuts) {
         BigDecimal finalPrice = BigDecimal.ZERO;
         //todo maybe add a check here for price
         for(String addingProductId : addingProdcuts) {
