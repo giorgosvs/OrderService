@@ -22,6 +22,7 @@ import es.merkle.component.repository.adapter.OrderAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -51,6 +52,7 @@ public class OrderService {
     private CustomerRepository customerRepository;
 
     //Create a new order with status 'NEW'
+    @Transactional
     public Order createOrder(CreateOrderRequest orderRequest) {
         Order order = mapCreateOrderRequest(orderRequest);
 
@@ -60,6 +62,7 @@ public class OrderService {
         return order;
     }
 
+    @Transactional
     public Order modifyOrder(ModifyOrderRequest orderRequest) throws RuntimeException {
 
         //Retrieve a saved order by its ID
@@ -122,13 +125,14 @@ public class OrderService {
         return order;
     }
 
+    @Transactional
     public SubmitOrderResponse submitOrder(SubmitOrderRequest submitOrderRequest) {
 
         //Retrieve saved order
         DbOrder savedOrder = orderAdapter.getReqOrderById(submitOrderRequest.getOrderId());
         //Map to order obj
         Order order = orderMapper.mapToOrder(savedOrder);
-        //Fetch customer
+        //Fetch customer - should 've used the customerAdapter here
         DbCustomer dbCustomer = customerRepository.findById(order.getCustomer().getId()).orElseThrow(() -> new CustomerNotFoundException("Customer not found"));
         //get the active products
         List<Product> addingProducts = order.getAddingProducts();
@@ -206,7 +210,7 @@ public class OrderService {
                     //Save owned product to db
                     dbCustomer.getOwnedProducts().add(dbProduct);
                 }
-                //Persist changes
+                //Persist changes -- should use adapter here as well
                 customerRepository.save(dbCustomer);
 
                 response.getOrder().setStatus(OrderStatus.SUBMITTED);
