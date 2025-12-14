@@ -1,6 +1,7 @@
 package es.merkle.component.repository.adapter;
 
 import es.merkle.component.exception.ResourceNotFoundException;
+import es.merkle.component.repository.entity.DbOrderItem;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import es.merkle.component.mapper.OrderMapper;
@@ -18,8 +19,8 @@ public class OrderAdapter {
     @Autowired
     private OrderMapper orderMapper;
 
-    public void saveOrder(Order order) {
-        DbOrder dbOrder = orderMapper.mapToDbOrder(order);
+    public void saveOrder(Order order, DbOrder dbOrder) {
+        orderMapper.mapToDbOrder(order,dbOrder);
 //        System.out.println("Saving Order Object : " + dbOrder.getId());
         orderRepository.save(dbOrder);
     }

@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Getter
 public enum ProductStatus {
     AVAILABLE,
-    NOT_AVAILABLE("NOT AVAILABLE"),
+    NOT_AVAILABLE,
     VIP;
 
     private String value;

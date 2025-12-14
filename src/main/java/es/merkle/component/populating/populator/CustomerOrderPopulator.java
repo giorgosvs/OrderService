@@ -15,7 +15,7 @@ public class CustomerOrderPopulator implements OrderPopulator {
     @Override
     public void populate(Order order) {
         Customer customer = getCustomer(order.getCustomerId());
-        order.setCustomer(customer);
+//        order.setCustomer(customer);
     }
 
     private Customer getCustomer(String id) {

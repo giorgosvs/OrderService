@@ -53,7 +53,7 @@ public class DatabaseConfiguration {
                             .name("Spitify")
                             .price(BigDecimal.valueOf(6.99))
                             .productCategory("TV")
-                            .productStatus("NOT AVAILABLE")
+                            .productStatus("NOT_AVAILABLE")
                             .releasedDate(LocalDate.of(2023, 5, 10))
                             .expiringDate(LocalDate.now().plusMonths(6))
                             .build(),

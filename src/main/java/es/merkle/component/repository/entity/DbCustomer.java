@@ -34,4 +34,9 @@ public class DbCustomer {
             , joinColumns = @JoinColumn(name = "customer_id")
             , inverseJoinColumns = @JoinColumn(name = "product_id"))
     private List<DbProduct> ownedProducts = new ArrayList<>();
+
+    @OneToMany(mappedBy = "customer")
+    private List<DbOrder> orders = new ArrayList<>();
+
+
 }

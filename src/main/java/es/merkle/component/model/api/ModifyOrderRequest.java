@@ -18,4 +18,6 @@ public class ModifyOrderRequest {
     private OrderType orderType;
     @NotEmpty
     private String productId;
+    @NotEmpty
+    private Integer quantity;
 }
