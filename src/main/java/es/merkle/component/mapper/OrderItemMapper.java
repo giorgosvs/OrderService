@@ -9,10 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.UUID;
 
-@Mapper(componentModel = "spring", imports = {UUID.class})
+@Mapper(componentModel = "spring", uses = ProductMapper.class)
 public interface OrderItemMapper {
 
-    @Mapping(target = "product", source = "product")
     OrderItem mapToOrderItem(DbOrderItem dbOrderItem);
 
     @Mapping(target = "order", ignore = true)

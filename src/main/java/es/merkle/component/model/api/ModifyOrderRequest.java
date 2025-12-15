@@ -19,5 +19,5 @@ public class ModifyOrderRequest {
     @NotEmpty
     private String productId;
     @NotEmpty
-    private Integer quantity;
+    private int quantity;
 }

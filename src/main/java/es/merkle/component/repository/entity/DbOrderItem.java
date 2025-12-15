@@ -30,7 +30,7 @@ public class DbOrderItem {
     @JoinColumn(name = "product_id", nullable = false)
     private DbProduct product;
 
-    private Integer quantity;
+    private int quantity;
 
     private BigDecimal unitPrice;
 

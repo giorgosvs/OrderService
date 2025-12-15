@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 public class OrderItem {
     private Product product;
-    private Integer quantity;
+    private int quantity;
     private BigDecimal unitPrice;
 
     public static OrderItem create(Product product, int quantity) {

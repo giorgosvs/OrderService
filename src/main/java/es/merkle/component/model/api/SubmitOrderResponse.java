@@ -9,6 +9,5 @@ import lombok.*;
 @AllArgsConstructor
 @ToString
 public class SubmitOrderResponse {
-    private Order order;
     private String message;
 }

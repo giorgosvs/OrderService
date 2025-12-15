@@ -1,6 +1,7 @@
 package es.merkle.component.repository.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,8 +47,6 @@ public class DbOrder {
     private List<DbOrderItem> items = new ArrayList<>();
 
     @CreationTimestamp
-    private LocalDateTime submittedAt;
-
-
+    private LocalDate submittedAt;
 
 }

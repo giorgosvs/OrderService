@@ -1,13 +1,17 @@
 package es.merkle.component.service;
 
 import es.merkle.component.exception.InvalidOrderException;
+import es.merkle.component.exception.ResourceNotFoundException;
 import es.merkle.component.mapper.CustomerMapper;
 import es.merkle.component.mapper.ProductMapper;
 import es.merkle.component.mapper.dto.CreateOrderMapper;
+import es.merkle.component.mapper.dto.ModifyOrderMapper;
+import es.merkle.component.mapper.dto.SubmitOrderMapper;
 import es.merkle.component.model.*;
-import es.merkle.component.model.api.ModifyOrderRequest;
+import es.merkle.component.model.api.*;
 import es.merkle.component.repository.CustomerRepository;
 import es.merkle.component.repository.OrderRepository;
+import es.merkle.component.repository.ProductRepository;
 import es.merkle.component.repository.adapter.CustomerAdapter;
 import es.merkle.component.repository.adapter.ProductAdapter;
 import es.merkle.component.repository.entity.DbCustomer;
@@ -16,9 +20,6 @@ import es.merkle.component.repository.entity.DbProduct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import es.merkle.component.mapper.OrderMapper;
-import es.merkle.component.model.api.CreateOrderRequest;
-import es.merkle.component.model.api.SubmitOrderRequest;
-import es.merkle.component.model.api.SubmitOrderResponse;
 import es.merkle.component.populating.PopulatorRunner;
 import es.merkle.component.repository.adapter.OrderAdapter;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,10 @@ public class OrderService {
     @Autowired
     private CreateOrderMapper createOrderMapper;
     @Autowired
+    private ModifyOrderMapper modifyOrderMapper;
+    @Autowired
+    private SubmitOrderMapper submitOrderMapper;
+    @Autowired
     private OrderMapper orderMapper;
     @Autowired
     private ProductMapper productMapper;
@@ -61,36 +66,48 @@ public class OrderService {
     private CustomerRepository customerRepository;
     @Autowired
     private OrderRepository orderRepository;
+    @Autowired
+    private ProductRepository productRepository;
 
     //Create a new order with status 'NEW'
     @Transactional
-    public Order createOrder(CreateOrderRequest orderRequest) {
+    public CreateOrderResponse createOrder(CreateOrderRequest orderRequest) {
+        //map CreateOrderRequest to order
         Order order = mapCreateOrderRequest(orderRequest);
 
-        order.setStatus(OrderStatus.NEW);
+        //Fetch customer data
+        DbCustomer customer = customerRepository.findById(orderRequest.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
 
+        //create new db order and set the new UUID and customer
         DbOrder dbOrder = new DbOrder();
         dbOrder.setId(order.getId());
+        dbOrder.setCustomer(customer);
 
+        //map order to entity
         orderMapper.mapToDbOrder(order, dbOrder);
+        //map order to response
+        CreateOrderResponse response = createOrderMapper.mapOrderToCreateOrderResponse(order);
         //removed try-catch here, returned success message on failure
 //        populateOrder(order); //populate order with customer information(CustomerOrderPopulator)
-        //we don't need customer information
 
-
+        //save entity
         orderRepository.save(dbOrder);
-        return order;
+        return response;
     }
 
     @Transactional
-    public Order modifyOrder(ModifyOrderRequest orderRequest) throws RuntimeException {
-        //Retrieve a saved order by its ID todo test (Ex)
+    public ModifyOrderResponse modifyOrder(ModifyOrderRequest orderRequest) throws RuntimeException {
+        //Retrieve a saved order by its ID
         DbOrder savedOrder = orderAdapter.getReqOrderById(orderRequest.getOrderId());
-        Order order = orderMapper.mapToOrder(savedOrder);
 
-        //Check if requested product is available todo test (Ex)
+        //Check if requested product is available
         DbProduct reqProduct = productAdapter.getReqProductById(orderRequest.getProductId());
         Product product = productMapper.mapToProduct(reqProduct);
+
+        //map entity to order and map request to order
+        Order order = orderMapper.mapToOrder(savedOrder);
+        modifyOrderMapper.updateOrderFromRequest(orderRequest, order);
 
         switch (orderRequest.getOrderType()) {
             case ADD -> order.addItem(product, orderRequest.getQuantity());
@@ -99,18 +116,24 @@ public class OrderService {
 
             default -> throw new InvalidOrderException("Unsupported Order Type :" + orderRequest.getOrderType());
         }
-        //Process order
 
+        //Process order
         //Set the final price
         order.recalculateFinalPrice();
+
         //Validate the order
         order.setStatus(validateOrder(order));
-        order.setSubmittedAt(LocalDateTime.now());
+        //Add timestamp
+        order.setSubmittedAt(LocalDate.now());
+        //SetOrderType
+        order.setOrderType(orderRequest.getOrderType());
 
         //Persist the updated order in the database.
         saveOrder(order,savedOrder);
+        //Map response
+        ModifyOrderResponse response = modifyOrderMapper.mapOrderToModifyOrderResponse(order);
 
-        return order;
+        return response;
     }
 
     @Transactional
@@ -118,21 +141,35 @@ public class OrderService {
 
         //Retrieve saved order
         DbOrder savedOrder = orderAdapter.getReqOrderById(submitOrderRequest.getOrderId());
+        //Retrieve customer
+        DbCustomer customer = savedOrder.getCustomer();
+        if (customer == null) {
+            throw new IllegalStateException("Order has no customer");
+        }
         //Map to order obj
         Order order = orderMapper.mapToOrder(savedOrder);
-        orderMapper.updateSubmitOrderRequestToOrder(submitOrderRequest,order);
+        submitOrderMapper.updateSubmitOrderRequestToOrder(submitOrderRequest,order);
 
-//        DbCustomer customer = customerMapper.mapCustomerToDbCustomer(order.getCustomer());
         //get the active products
-        List<OrderItem> addingProducts = order.getOrderItems();
+        List<OrderItem> orderItems = order.getOrderItems();
+
+        switch(order.getStatus()){
+            case NEW -> throw new InvalidOrderException("The order was not submitted because it's not in a final status");
+            case INVALID -> {
+//                order.setStatus(OrderStatus.FAILED);
+//                saveOrder(order,savedOrder);
+                throw new InvalidOrderException("The order was not submitted because it's INVALID");
+//                return new SubmitOrderResponse("The order was not submitted because it's INVALID");
+            }
+        }
 
         //Handle submission
-//        SubmitOrderResponse response = handleSubmitOrder(order, customer, addingProducts);
+        handleSubmitOrder(order, customer, orderItems);
 
         //Save order to db
         saveOrder(order,savedOrder);
-//        return response;
-        return null;
+
+        return new SubmitOrderResponse("The order was submitted successfully");
     }
 
     private void saveOrder(Order order, DbOrder dbOrder
@@ -167,46 +204,24 @@ public class OrderService {
         return hasInvalidAddingProduct ? OrderStatus.INVALID : OrderStatus.VALID;
     }
 
-//    private SubmitOrderResponse handleSubmitOrder(Order order, DbCustomer dbCustomer, List<Product> activeProducts) {
-//
-//        SubmitOrderResponse response = new SubmitOrderResponse();
-//        response.setOrder(order);
-//
-//        //switch between OrderStatus to set response message
-//        switch (order.getStatus()) {
-//
-//            case INVALID -> {
-//                response.getOrder().setStatus(OrderStatus.FAILED);
-//                response.setMessage("The order was not submitted because it's INVALID");
-//                throw new InvalidOrderException(response.getMessage());
-//            }
-//            case VALID -> {
-//                for (Product product : activeProducts) {
-//                    //Add owned product to response body
-//                    order.getCustomer().getOwnedProducts().add(product);
-//
-//                    DbProduct dbProduct = productMapper.mapToDbProduct(product);
-//                    //Save owned product to db
-//                    dbCustomer.getOwnedProducts().add(dbProduct);
-//                }
-//                //Persist changes -- should use adapter here as well
-//                customerRepository.save(dbCustomer);
-//
-//                response.getOrder().setStatus(OrderStatus.SUBMITTED);
-//                response.setMessage("The order was submitted successfully");
-//            }
-//            case NEW -> {
-//                response.getOrder().setStatus(OrderStatus.NEW);
-//                response.setMessage("The order was not submitted because it's not in a final status");
-//                throw new InvalidOrderException(response.getMessage());
-//            }
-//            default -> {
-//                throw new InvalidOrderException("Could not perform submission with order status being : "+ order.getStatus());
-//            }
-//        }
-//
-//        return response;
-//    }
+    private void handleSubmitOrder(Order order, DbCustomer dbCustomer, List<OrderItem> orderItems) {
+                for (OrderItem orderItem : orderItems) {
+                    //Add the owned products for the dbCustomer
+
+                    //Fetch dbProduct and map to orderItem
+                    DbProduct product = productRepository.findById(orderItem.getProduct().getId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+                    //Save owned product to db
+                    if(!dbCustomer.getOwnedProducts().contains(product)) {
+                        dbCustomer.getOwnedProducts().add(product);
+                    }
+                }
+                //Persist changes
+                customerRepository.save(dbCustomer);
+
+                order.setStatus(OrderStatus.SUBMITTED);
+    }
 }
 
 

@@ -2,6 +2,7 @@ package es.merkle.component.mapper.dto;
 
 import es.merkle.component.model.Order;
 import es.merkle.component.model.api.ModifyOrderRequest;
+import es.merkle.component.model.api.ModifyOrderResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -11,4 +12,6 @@ public interface ModifyOrderMapper {
 
     @Mapping(source = "orderId", target = "id")
     void updateOrderFromRequest(ModifyOrderRequest request, @MappingTarget Order order);
+
+    ModifyOrderResponse mapOrderToModifyOrderResponse(Order order);
 }

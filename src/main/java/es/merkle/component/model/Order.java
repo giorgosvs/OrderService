@@ -1,6 +1,7 @@
 package es.merkle.component.model;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,10 +23,15 @@ public class Order {
     //attributes added
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
-    private LocalDateTime submittedAt;
+    private LocalDate submittedAt;
 
     //OrderType - ADD
     public void addItem(Product product, Integer quantity) {
+        if(quantity<=0) {
+            throw new InvalidOrderException("Quantity must be greater than zero");
+        }
+
+        //find orderItem that contains the product
         OrderItem existing = findItem(product);
 
         if(existing != null) {
@@ -38,6 +44,7 @@ public class Order {
 
     //OrderType REMOVE
     public void removeItem(Product product, Integer quantity) {
+        //find orderItem that contains the product
         OrderItem existing = findItem(product);
 
         if(existing ==null) { //check if product is there
@@ -47,6 +54,7 @@ public class Order {
 
             if (existing.getQuantity() <= 0) {
                 orderItems.remove(existing); //if all products of this type are removed, then remove OrderItem
+
             }
         }
     }

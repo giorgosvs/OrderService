@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 @Mapper(componentModel = "spring", imports = {UUID.class},uses = OrderItemMapper.class)
 public abstract class OrderMapper {
 
+
     @Autowired
     protected OrderItemMapper orderItemMapper;
 
@@ -32,11 +33,11 @@ public abstract class OrderMapper {
                 .orderItems(
                         entity.getItems().stream()
                                 .map(orderItemMapper::mapToOrderItem)
-                                .collect(Collectors.toCollection(ArrayList::new))
+                                .collect(Collectors.toCollection(ArrayList::new)) //control collection type arraylist not List (immutable)
                 )
                 .build();
     }
-
+    //Update-in-place mapper - JPA generates UPDATE orders, does not instantiate a new dbOrder
     public void mapToDbOrder(Order order, DbOrder dbOrder) {
         dbOrder.setStatus(order.getStatus());
         dbOrder.setFinalPrice(order.getFinalPrice());
@@ -48,26 +49,22 @@ public abstract class OrderMapper {
                     .findFirst()
                     .orElse(null);
 
-            if (existing == null) {
+            if (existing == null) { //no more matching products, add the orderItem
                 DbOrderItem dbItem = orderItemMapper.mapToDbOrderItem(item);
                 dbItem.setOrder(dbOrder);
                 dbOrder.getItems().add(dbItem);
-            } else {
-                // ✅ update in place (NO new row)
+            } else { //set the quantity and the price
                 existing.setQuantity(item.getQuantity());
                 existing.setUnitPrice(item.getUnitPrice());
             }
         }
 
-        // Handle removals (optional but recommended)
+        //Handle removal
         dbOrder.getItems().removeIf(dbItem ->
                 order.getOrderItems().stream()
                         .noneMatch(oi -> oi.getProduct().getId().equals(dbItem.getProduct().getId()))
         );
     }
-
-    @Mapping(source = "orderId", target = "id")
-    public abstract void updateSubmitOrderRequestToOrder(SubmitOrderRequest submitOrderRequest, @MappingTarget Order order);
 
 
 }
